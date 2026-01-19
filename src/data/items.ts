@@ -1,20 +1,18 @@
 import { prisma } from '@/db'
 import { firecrawl } from '@/lib/firecrawl'
-import { extractSchema, importSchema } from '@/schemas/import'
+import { authFnMiddleware } from '@/middlewares/auth'
+import { bulkImportSchema, extractSchema, importSchema } from '@/schemas/import'
 import { createServerFn } from '@tanstack/react-start'
 import z from 'zod'
-import { getSessionFn } from './session'
 
 export const scrapeUrlFn = createServerFn({ method: 'POST' })
+  .middleware([authFnMiddleware])
   .inputValidator(importSchema)
-  .handler(async ({ data }) => {
-
-    const user = await getSessionFn()
-
+  .handler(async ({ data, context }) => {
     const item = await prisma.savedItem.create({
       data: {
         url: data.url,
-        userId: user.user.id,
+        userId: context.session.user.id,
         status: 'PROCESSING',
       },
     })
@@ -29,19 +27,22 @@ export const scrapeUrlFn = createServerFn({ method: 'POST' })
             // prompt: 'Please extract the following fields from the webpage: publishedAt (the date the content was published at timestamp), author (the name of the author)',
           },
         ],
+        location:{
+        country: 'US',
+        languages: ['en']
+      },
         onlyMainContent: true,
       })
 
       const jsonData = result.json as z.infer<typeof extractSchema>
 
+      let publishedAt = null
 
-      let publishedAt = null;
+      if (jsonData.publishedAt) {
+        const date = new Date(jsonData.publishedAt)
 
-      if(jsonData.publishedAt) {
-        const date = new Date(jsonData.publishedAt);
-
-        if(!isNaN(date.getTime())) {
-          publishedAt = date;
+        if (!isNaN(date.getTime())) {
+          publishedAt = date
         }
       }
 
@@ -53,7 +54,7 @@ export const scrapeUrlFn = createServerFn({ method: 'POST' })
           title: result.metadata?.title || null,
           content: result.markdown || null,
           ogImage: result.metadata?.ogImage || null,
-          authoredAt: jsonData.author || null,
+          author: jsonData.author || null,
           publishedAt: publishedAt,
           status: 'COMPLETED',
         },
@@ -71,3 +72,19 @@ export const scrapeUrlFn = createServerFn({ method: 'POST' })
       return failedItem
     }
   })
+
+
+export const mapUrlFn = createServerFn({method: 'POST'}).middleware([authFnMiddleware])
+.inputValidator(bulkImportSchema)
+.handler(async ({data}) => {
+    const result = await firecrawl.map(data.url, {
+      limit: 25,
+      search: data.search,
+      location:{
+        country: 'US',
+        languages: ['en']
+      }
+    })
+
+    return result.links
+})  
