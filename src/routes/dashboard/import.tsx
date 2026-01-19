@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Field,
   FieldError,
@@ -15,12 +16,14 @@ import {
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { scrapeUrlFn } from '@/data/items'
+import { mapUrlFn, scrapeUrlFn } from '@/data/items'
 import { bulkImportSchema, importSchema } from '@/schemas/import'
+import { type SearchResultWeb } from '@mendable/firecrawl-js'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
 import { GlobeIcon, Link2Icon } from 'lucide-react'
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/dashboard/import')({
   component: RouteComponent,
@@ -28,6 +31,35 @@ export const Route = createFileRoute('/dashboard/import')({
 
 function RouteComponent() {
   const [isPending, startTransition] = useTransition()
+
+  // bulk import state
+
+  const [discoveredLinks, setDiscoveredLinks] = useState<
+    Array<SearchResultWeb>
+  >([])
+
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set())
+
+  function handleSelectAll() {
+
+    if(selectedUrls.size === discoveredLinks.length) {
+      setSelectedUrls(new Set())
+    }else {
+      setSelectedUrls(new Set(discoveredLinks.map(link => link.url)))
+    }
+  }
+
+  function handleToggleUrl(url: string) {
+    const newSelectedUrls = new Set(selectedUrls)
+    if(newSelectedUrls.has(url)) {
+      newSelectedUrls.delete(url)
+    }else {
+      newSelectedUrls.add(url)
+    }
+    setSelectedUrls(newSelectedUrls)
+  }
+
+  // forms
 
   const signleForm = useForm({
     defaultValues: {
@@ -39,8 +71,9 @@ function RouteComponent() {
     onSubmit: async ({ value }) => {
       startTransition(async () => {
         await scrapeUrlFn({
-          data:value
+          data: value,
         })
+        toast.success('URL scraped successfully!')
       })
     },
   })
@@ -54,7 +87,12 @@ function RouteComponent() {
       onSubmit: bulkImportSchema,
     },
     onSubmit: async ({ value }) => {
-      startTransition(async () => {})
+      startTransition(async () => {
+        const data = await mapUrlFn({
+          data: value,
+        })
+        setDiscoveredLinks(data)
+      })
     },
   })
 
@@ -150,7 +188,7 @@ function RouteComponent() {
                   management.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault()
@@ -230,6 +268,46 @@ function RouteComponent() {
                     </Button>
                   </FieldGroup>
                 </form>
+
+                {/* Discovered URLS list */}
+
+                {discoveredLinks.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">
+                        Found {discoveredLinks.length} links
+                      </p>
+                      <Button variant={'outline'} size={'sm'} onClick={handleSelectAll}>
+                        {selectedUrls.size === discoveredLinks.length ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </div>
+
+                    <div className="max-h-80 space-y-2 overflow-y-auto rounded-md border p-4">
+                      {discoveredLinks.map((link) => (
+                        <label
+                          key={link.url}
+                          className="hover:bg-accent/50 flex items-start gap-2 rounded-md p-2 cursor-pointer"
+                        >
+                          <Checkbox className="mt-0.5" checked={selectedUrls.has(link.url)} onCheckedChange={() => handleToggleUrl(link.url)} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {link.title ?? 'Title has not been found'}
+                            </p>
+                            <p className="truncate text-muted-foreground text-xs">
+                              {link.description ??
+                                'Description has not been found'}
+                            </p>
+                            <p className="truncate text-muted-foreground text-xs">
+                              {link.url}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <Button className="w-full">Import</Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
