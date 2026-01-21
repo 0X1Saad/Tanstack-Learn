@@ -16,7 +16,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Copy, Inbox } from 'lucide-react'
 import z from 'zod'
 import { zodValidator } from '@tanstack/zod-adapter'
-import { use, useEffect, useState } from 'react'
+import { Suspense, use, useEffect, useState } from 'react'
 import {
   Empty,
   EmptyContent,
@@ -25,6 +25,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const itemsSearchParamsSchema = z.object({
   query: z.string().default(''),
@@ -35,9 +36,31 @@ type ItemsSearchParams = z.infer<typeof itemsSearchParamsSchema>
 
 export const Route = createFileRoute('/dashboard/items/')({
   component: RouteComponent,
-  loader: () => ({itemsPromise: getItemsFn()}),
+  loader: () => ({ itemsPromise: getItemsFn() }),
   validateSearch: zodValidator(itemsSearchParamsSchema),
 })
+
+
+function ItemListSkeleton() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2 ">
+        {[1,2,3,4].map((index) => (
+          <Card key={index} className="overflow-hidden pt-0">
+            <Skeleton className='aspect-video w-full'/>
+            <CardHeader className="space-y-3 ">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="size-8 rounded-md" />
+
+              </div>
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-4 w-40" />
+            </CardHeader>
+          </Card>
+        ))}
+    </div>
+  )
+}
 
 function ItemList({
   query,
@@ -48,7 +71,6 @@ function ItemList({
   status: ItemsSearchParams['status']
   data: ReturnType<typeof getItemsFn>
 }) {
-
   const items = use(data)
   const filteredData = items.filter((item) => {
     const matchesStatus = status === 'all' || item.status === status
@@ -60,41 +82,40 @@ function ItemList({
     return matchesStatus && matchesQuery
   })
 
-if (filteredData.length === 0) {
-  return (
-    <Empty className="border rounded-lg h-full">
-      <EmptyHeader>
-        <EmptyMedia variant="default">
-          <Inbox className="size-16 text-muted-foreground" />
-        </EmptyMedia>
+  if (filteredData.length === 0) {
+    return (
+      <Empty className="border rounded-lg h-full">
+        <EmptyHeader>
+          <EmptyMedia variant="default">
+            <Inbox className="size-16 text-muted-foreground" />
+          </EmptyMedia>
 
-        <EmptyTitle>
-          {items.length === 0
-            ? 'No saved items yet.'
-            : 'No items match your filters.'}
-        </EmptyTitle>
+          <EmptyTitle>
+            {items.length === 0
+              ? 'No saved items yet.'
+              : 'No items match your filters.'}
+          </EmptyTitle>
 
-        <EmptyDescription>
-          {items.length === 0
-            ? 'Start saving articles and resources to see them here.'
-            : 'Try adjusting your search or filter criteria.'}
-        </EmptyDescription>
-      </EmptyHeader>
+          <EmptyDescription>
+            {items.length === 0
+              ? 'Start saving articles and resources to see them here.'
+              : 'Try adjusting your search or filter criteria.'}
+          </EmptyDescription>
+        </EmptyHeader>
 
-      {items.length === 0 && (
-        <EmptyContent>
-          <Link
-            to="/dashboard/import"
-            className={buttonVariants({ variant: 'outline' })}
-          >
-            Import Items
-          </Link>
-        </EmptyContent>
-      )}
-    </Empty>
-  )
-}
-
+        {items.length === 0 && (
+          <EmptyContent>
+            <Link
+              to="/dashboard/import"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              Import Items
+            </Link>
+          </EmptyContent>
+        )}
+      </Empty>
+    )
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -103,7 +124,9 @@ if (filteredData.length === 0) {
           key={item.id}
           className="group overflow-hidden transition-all hover:shadow-lg pt-0"
         >
-          <Link to="/dashboard" className="block p-4">
+          <Link to="/dashboard/items/$itemId" params={{
+            itemId:item.id
+          }} className="block p-4">
             {item.ogImage && (
               <div className="aspect-video w-full overflow-hidden rounded-md bg-muted">
                 <img
@@ -212,8 +235,10 @@ function RouteComponent() {
           </SelectContent>
         </Select>
       </div>
-
+        
+        <Suspense fallback={<ItemListSkeleton />}>
       <ItemList query={query} status={status} data={itemsPromise} />
+        </Suspense>
     </div>
   )
 }
