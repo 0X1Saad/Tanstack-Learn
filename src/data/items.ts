@@ -5,6 +5,8 @@ import { bulkImportSchema, extractSchema, importSchema } from '@/schemas/import'
 import { createServerFn } from '@tanstack/react-start'
 import { notFound } from '@tanstack/react-router'
 import z from 'zod'
+import { generateText } from 'ai'
+import { openrouter } from '@/lib/openRouter'
 
 export const scrapeUrlFn = createServerFn({ method: 'POST' })
   .middleware([authFnMiddleware])
@@ -196,4 +198,49 @@ export const bulkScrapeFn = createServerFn({ method: 'POST' })
     }
 
     return item;
+  })
+
+  export const saveSummaryAndGenerateTagsFn = createServerFn({ method: 'POST' }).middleware([authFnMiddleware])
+  .inputValidator(z.object({
+    id: z.string(),
+    summary: z.string(),
+  }))
+  .handler(async ({ data, context }) => {
+    const existing = await prisma.savedItem.findUnique({
+      where: {
+        userId: context.session.user.id,
+        id: data.id,
+      },
+    })
+
+    if(!existing) {
+      throw notFound()
+    }
+
+    const {text} = await generateText({
+      model: openrouter.chat('xiaomi/mimo-v2-flash:free'),
+      system: `You are a helpful assistant that generates relevant and concise tags for content based on its summary. The tags should be:
+      - 3 to 5 tags
+      - Each tag should be a single word or a short phrase
+      - Tags should accurately reflect the main topics and themes of the content
+      - Return the tags as a comma-separated list
+      Example: technology, AI, machine learning, javaScript, web development`,
+      prompt: `Based on the following summary, generate a list of relevant tags:\n\n${data.summary}`,
+    })
+
+    const tags = text.split(',').map(tag => tag.trim().toLowerCase()).filter(tag => tag.length > 0).slice(0,5)
+
+
+    const item = await prisma.savedItem.update({
+      where: {
+        userId: context.session.user.id,
+        id: data.id,
+      },
+      data: {
+        summary: data.summary,
+        tags: tags,
+      },
+    })
+
+    return item
   })
