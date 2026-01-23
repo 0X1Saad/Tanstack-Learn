@@ -8,6 +8,7 @@ import { fileURLToPath, URL } from 'url'
 import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 
+
 const config = defineConfig({
   resolve: {
     alias: {
@@ -17,7 +18,6 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro(),
-    // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
@@ -26,12 +26,17 @@ const config = defineConfig({
     viteReact(),
   ],
   optimizeDeps: {
-    exclude: [
-      '@tanstack/start-server-core',
-      '@tanstack/react-router'
-    ],
+    exclude: ['@tanstack/start-server-core', '@tanstack/react-router'],
   },
-  nitro: {},
+ nitro: {
+    rollupConfig: {
+      external: ['pg'],
+      output: {
+        // This ensures the commonjs 'pg' module is handled correctly
+        interop: 'auto', 
+      },
+    },
+  },
 })
 
 export default config
