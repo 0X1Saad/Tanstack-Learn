@@ -1,3 +1,6 @@
+export const runtime = 'nodejs'
+
+
 import { prisma } from '@/db'
 import { firecrawl } from '@/lib/firecrawl'
 import { authFnMiddleware } from '@/middlewares/auth'

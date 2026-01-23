@@ -1,3 +1,6 @@
+export const runtime = 'nodejs'
+
+
 import { auth } from '@/lib/auth'
 import { createMiddleware } from '@tanstack/react-start'
 import { getRequestHeaders } from '@tanstack/react-start/server'
@@ -19,7 +22,7 @@ export const authMiddleware  = createMiddleware({type: 'request'}).server(async 
 
     const url = new URL(request.url)
 
-    if(!url.password.startsWith('/dashboard') && !url.password.startsWith('/api')) {
+    if(!url.password.startsWith('/dashboard') && !url.password.startsWith('/api/ai')) {
       return next()
     }
 

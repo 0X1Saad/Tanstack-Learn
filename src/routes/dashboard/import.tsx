@@ -1,5 +1,3 @@
-export const serverRuntime = 'node'
-
 import { Button } from '@/components/ui/button'
 import {
   Card,
