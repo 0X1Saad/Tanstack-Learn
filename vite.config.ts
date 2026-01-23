@@ -31,6 +31,7 @@ const config = defineConfig({
       '@tanstack/react-router'
     ],
   },
+  nitro: {},
 })
 
 export default config
