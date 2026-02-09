@@ -106,12 +106,16 @@ export default function DiscoverPage() {
     },
   });
 
-  function onSubmit(data: z.infer<typeof searchSchema>) {
-    startTransition(async () => {
-      const results = await searchWebAction({ data: { query: data.query } });
-      setSearchResults(results ?? []);
-    });
-  }
+function onSubmit(data: z.infer<typeof searchSchema>) {
+  startTransition(async () => {
+    const results = await searchWebAction({
+      query: data.query,
+    })
+
+    setSearchResults(results ?? [])
+  })
+}
+
 
   return (
     <div className="flex flex-1 items-center justify-center py-8">
