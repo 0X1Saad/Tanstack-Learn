@@ -1,10 +1,10 @@
-import { streamText } from 'ai'
-import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
+import { streamText, generateText } from 'ai'
 import { openrouter } from '@/lib/openRouter'
+import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  // ✅ Auth
   const session = await auth.api.getSession({
     headers: req.headers,
   })
@@ -13,34 +13,62 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { itemId, prompt } = await req.json()
+  const { prompt } = await req.json()
 
-  if (!itemId || !prompt?.trim()) {
+  if (!prompt || !prompt.trim()) {
     return NextResponse.json(
-      { error: 'Missing itemId or prompt' },
+      { error: 'Missing prompt' },
       { status: 400 }
     )
   }
 
-  const item = await prisma.savedItem.findFirst({
-    where: { id: itemId, userId: session.user.id },
-  })
+  // ✅ VERY IMPORTANT: truncate for free models
+  const SAFE_PROMPT = prompt.slice(0, 6_000)
 
-  if (!item) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
+  let hasStreamed = false
 
   const result = streamText({
     model: openrouter.chat('arcee-ai/trinity-large-preview:free'),
     system: `
-You are a helpful assistant that summarizes text concisely.
-- 2–3 paragraphs
-- Focus on key points
+You MUST return a summary.
+Never return an empty response.
+
+Rules:
+- 2 short paragraphs
 - Clear language
+- No markdown
     `,
-    prompt: `Summarize the following content:\n\n${prompt}`,
+    prompt: `Summarize the following content:\n\n${SAFE_PROMPT}`,
+    onChunk() {
+      hasStreamed = true
+    },
   })
 
+  // ⛑️ Fallback if streaming fails (very common on free models)
+  if (!hasStreamed) {
+    const { text } = await generateText({
+      model: openrouter.chat('arcee-ai/trinity-large-preview:free'),
+      system: `
+You MUST return a summary.
+- 2 short paragraphs
+- Clear language
+- No markdown
+      `,
+      prompt: `Summarize the following content:\n\n${SAFE_PROMPT}`,
+    })
+
+    if (!text?.trim()) {
+      return NextResponse.json(
+        { error: 'AI failed to generate summary' },
+        { status: 500 }
+      )
+    }
+
+    return new Response(text, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  }
+
+  // ✅ Required for useCompletion()
   return result.toTextStreamResponse()
 }
-
