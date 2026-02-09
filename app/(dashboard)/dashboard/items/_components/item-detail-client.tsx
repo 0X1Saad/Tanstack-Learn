@@ -39,18 +39,25 @@ export default function ItemDetailClient({ data }: Props) {
     api: '/api/ai/summary',
     initialCompletion: data.summary ?? '',
     onFinish: async (_prompt, text) => {
-      if (!text.trim()) {
-        toast.error('AI returned empty summary')
+      const cleaned = text.trim()
+
+      // ✅ Strong guard
+      if (cleaned.length < 50) {
+        toast.error('Summary generation failed, please try again')
         return
       }
 
-      await saveSummaryActionAndGenTags({ id: data.id, summary: text })
+      await saveSummaryActionAndGenTags({
+        id: data.id,
+        summary: cleaned,
+      })
+
       toast.success('Summary & tags saved')
       router.refresh()
     },
-    onError: (e) => {
-      toast.error(e.message)
-      console.error(e)
+    onError: (err) => {
+      toast.error(err.message)
+      console.error(err)
     },
   })
 
@@ -60,10 +67,14 @@ export default function ItemDetailClient({ data }: Props) {
       return
     }
 
-    // ✅ pass the content directly as the prompt
-    complete(data.content)
-  }
+    const MAX_CHARS = 6_000 // ✅ safe for free OpenRouter models
 
+    // ✅ Trim before sending
+    const prompt = data.content.slice(0, MAX_CHARS)
+
+    complete(prompt)
+  }
+  
   return (
     <div className="mx-auto max-w-3xl space-y-6 w-full">
       <Link
